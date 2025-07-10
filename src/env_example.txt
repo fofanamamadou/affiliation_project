@@ -1,0 +1,21 @@
+# Configuration de la base de données PostgreSQL
+DATABASE_NAME=affiliation_db
+DATABASE_USER_NAME=postgres
+DATABASE_PASSWORD=your_password
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+
+# Configuration email SMTP
+EMAIL_HOST=smtp.gmail.com
+EMAIL_HOST_USER=your_email@gmail.com
+EMAIL_HOST_PASSWORD=your_app_password
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+
+# Configuration du site
+AFFILIATION_BASE_URL=https://tondomaine.com
+DEFAULT_FROM_EMAIL=noreply@tondomaine.com
+
+# Configuration Django
+SECRET_KEY=your-secret-key-here
+DEBUG=True 

@@ -2,29 +2,28 @@ from django.contrib.auth.hashers import check_password
 from .serializers import InfluenceurSerializer
 from prospect.models import Prospect
 from prospect.serializers import ProspectSerializers
-from rest_framework.decorators import api_view
+from remise.models import Remise
+from remise.serializers import RemiseSerializers
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from django.core.mail import send_mail
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import Influenceur
-from remise.models import Remise
-from remise.serializers import RemiseSerializers
-# Create your views here.
-
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
+from .permissions import (
+    IsAdminUser, IsInfluenceurOrAdmin, CanCreateInfluenceurs,
+    CanValidateProspects, CanPayRemises, CanViewStatistics, IsOwnerOrAdmin
+)
+from .auth import get_influenceur_from_user
 from django.core.mail import send_mail
-from .models import Influenceur
-from .serializers import InfluenceurSerializer
+from django.conf import settings
+from django.db import models
 
 @api_view(['GET', 'POST'])
+@permission_classes([IsAdminUser])
 def influenceur_view(request):
     """
     Vue API pour lister tous les influenceurs (GET) ou en créer un (POST).
-    Après création, envoie automatiquement le lien d'affiliation par email à l'influenceur.
+    Seuls les admins peuvent accéder à cette vue.
     """
     if request.method == 'GET':
         influenceurs = Influenceur.objects.all()
@@ -37,79 +36,82 @@ def influenceur_view(request):
             influenceur = serializer.save()
 
             # Envoi du mail avec le lien d'affiliation
-            send_mail(
-                subject="Votre lien d'affiliation",
-                message=f"Bonjour {influenceur.nom}, voici votre lien d'affiliation : {influenceur.get_affiliation_link()}",
-                from_email="noreply@tondomaine.com",
-                recipient_list=[getattr(influenceur, 'email', None)],  # Assure-toi que le champ email existe
-                fail_silently=True,
-            )
+            try:
+                send_mail(
+                    subject="Votre lien d'affiliation",
+                    message=f"Bonjour {influenceur.nom}, voici votre lien d'affiliation : {influenceur.get_affiliation_link()}",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[influenceur.email],
+                    fail_silently=True,
+                )
+            except Exception as e:
+                print(f"Erreur lors de l'envoi de la notification : {e}")
+            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@permission_classes([IsInfluenceurOrAdmin])
 def influenceur_detail_view(request, pk):
+    """
+    Vue API pour obtenir les détails d'un influenceur.
+    L'influenceur peut voir ses propres détails, les admins peuvent voir tous.
+    """
     influenceur = get_object_or_404(Influenceur, pk=pk)
+    
+    # Vérifier les permissions
+    current_influenceur = get_influenceur_from_user(request.user)
+    if not request.user.is_superuser and current_influenceur and current_influenceur.id != influenceur.id:
+        return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    
     serializer = InfluenceurSerializer(influenceur)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsInfluenceurOrAdmin])
 def influenceur_update_view(request, pk):
     """
     Vue API pour mettre à jour un influenceur existant.
-    - PUT : remplace toutes les infos de l'influenceur.
-    - PATCH : modifie seulement les champs fournis.
+    L'influenceur peut modifier ses propres infos, les admins peuvent modifier tous.
     """
     influenceur = get_object_or_404(Influenceur, pk=pk)
+    
+    # Vérifier les permissions
+    current_influenceur = get_influenceur_from_user(request.user)
+    if not request.user.is_superuser and current_influenceur and current_influenceur.id != influenceur.id:
+        return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    
     serializer = InfluenceurSerializer(influenceur, data=request.data, partial=(request.method == 'PATCH'))
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-
 @api_view(['DELETE'])
+@permission_classes([IsAdminUser])
 def influenceur_delete_view(request, pk):
     """
     Vue API pour supprimer un influenceur existant.
-    - DELETE : supprime l'influenceur d'identifiant <pk>.
+    Seuls les admins peuvent supprimer des influenceurs.
     """
     influenceur = get_object_or_404(Influenceur, pk=pk)
     influenceur.delete()
     return Response({'detail': 'Influenceur supprimé avec succès.'}, status=status.HTTP_204_NO_CONTENT)
 
-
-
-@api_view(['POST'])
-def influenceur_login_view(request):
-    """
-    Vue API pour connecter un influenceur.
-    - POST : attend 'nom' et 'password' dans le body.
-    - Retourne l'influenceur si les identifiants sont corrects, sinon une erreur.
-    """
-    nom = request.data.get('nom')
-    password = request.data.get('password')
-    if not nom or not password:
-        return Response({'detail': 'Nom et mot de passe requis.'}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        influenceur = Influenceur.objects.get(nom=nom)
-    except Influenceur.DoesNotExist:
-        return Response({'detail': 'Nom ou mot de passe incorrect.'}, status=status.HTTP_401_UNAUTHORIZED)
-    if not check_password(password, influenceur.password):
-        return Response({'detail': 'Nom ou mot de passe incorrect.'}, status=status.HTTP_401_UNAUTHORIZED)
-    serializer = InfluenceurSerializer(influenceur)
-    return Response({'detail': 'Connexion réussie.', 'influenceur': serializer.data}, status=status.HTTP_200_OK)
-
-
-
 @api_view(['GET'])
+@permission_classes([IsInfluenceurOrAdmin])
 def influenceur_dashboard_view(request, pk):
     """
     Vue API pour afficher le tableau de bord d'un influenceur.
-    - GET : retourne stats et listes (prospects, remises) pour l'influenceur <pk>.
+    L'influenceur peut voir son propre dashboard, les admins peuvent voir tous.
     """
     influenceur = get_object_or_404(Influenceur, pk=pk)
+    
+    # Vérifier les permissions
+    current_influenceur = get_influenceur_from_user(request.user)
+    if not request.user.is_superuser and current_influenceur and current_influenceur.id != influenceur.id:
+        return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    
     prospects = Prospect.objects.filter(influenceur=influenceur)
     prospects_confirmes = prospects.filter(statut='confirme')
     remises = Remise.objects.filter(influenceur=influenceur)
@@ -129,28 +131,38 @@ def influenceur_dashboard_view(request, pk):
     }
     return Response(dashboard_data, status=status.HTTP_200_OK)
 
-
-
 @api_view(['GET'])
+@permission_classes([IsInfluenceurOrAdmin])
 def influenceur_prospects_view(request, pk):
     """
     Vue API pour lister tous les prospects d'un influenceur donné.
-    - GET : retourne la liste des prospects pour l'influenceur <pk>.
+    L'influenceur peut voir ses propres prospects, les admins peuvent voir tous.
     """
     influenceur = get_object_or_404(Influenceur, pk=pk)
+    
+    # Vérifier les permissions
+    current_influenceur = get_influenceur_from_user(request.user)
+    if not request.user.is_superuser and current_influenceur and current_influenceur.id != influenceur.id:
+        return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    
     prospects = Prospect.objects.filter(influenceur=influenceur)
     serializer = ProspectSerializers(prospects, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-
-
 @api_view(['GET'])
+@permission_classes([IsInfluenceurOrAdmin])
 def influenceur_remises_view(request, pk):
     """
     Vue API pour lister toutes les remises d'un influenceur donné.
-    - GET : retourne la liste des remises pour l'influenceur <pk>.
+    L'influenceur peut voir ses propres remises, les admins peuvent voir tous.
     """
     influenceur = get_object_or_404(Influenceur, pk=pk)
+    
+    # Vérifier les permissions
+    current_influenceur = get_influenceur_from_user(request.user)
+    if not request.user.is_superuser and current_influenceur and current_influenceur.id != influenceur.id:
+        return Response({'error': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    
     remises = Remise.objects.filter(influenceur=influenceur)
     serializer = RemiseSerializers(remises, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)

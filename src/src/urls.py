@@ -18,9 +18,10 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/influenceurs/', include('influenceur.urls')),
-    path('api/prospects/', include('prospect.urls')),
-    path('api/remises/', include('remise.urls')),
+    path('api/v1/', include('influenceur.urls')),
+    path('api/v1/', include('prospect.urls')),
+    path('api/v1/', include('remise.urls')),
+    path('affiliation/<str:code_affiliation>/', include('prospect.urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 ]
