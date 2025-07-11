@@ -15,11 +15,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 
-@api_view(['GET', 'POST'])
+@api_view(['GET'])
 @permission_classes([IsInfluenceurOrAdmin])
 def prospect_view(request):
     """
-    Vue API pour lister tous les prospects (GET) ou en créer un (POST).
+    Vue API pour lister tous les prospects (GET)
     Seuls les influenceurs connectés et admins peuvent accéder.
     """
     if request.method == 'GET':
@@ -32,36 +32,8 @@ def prospect_view(request):
             
         serializer = ProspectSerializers(prospects, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    elif request.method == 'POST':
-        serializer = ProspectSerializers(data=request.data)
-        if serializer.is_valid():
-            prospect = serializer.save()
-            
-            # Notification automatique à l'influenceur
-            try:
-                send_mail(
-                    subject=f"Nouveau prospect via votre lien d'affiliation",
-                    message=f"""
-                    Bonjour {prospect.influenceur.nom},
-                    
-                    Un nouveau prospect s'est inscrit via votre lien d'affiliation :
-                    - Nom : {prospect.nom}
-                    - Email : {prospect.email}
-                    - Date d'inscription : {prospect.date_inscription.strftime('%d/%m/%Y à %H:%M')}
-                    
-                    Votre lien d'affiliation : {prospect.influenceur.get_affiliation_link()}
-                    
-                    Connectez-vous à votre dashboard pour suivre vos prospects.
-                    """,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[prospect.influenceur.email],
-                    fail_silently=True,
-                )
-            except Exception as e:
-                print(f"Erreur lors de l'envoi de la notification : {e}")
-            
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 @api_view(['POST'])
 @permission_classes([CanValidateProspects])
@@ -116,14 +88,16 @@ def affiliation_form_view(request, code_affiliation):
         try:
             data = json.loads(request.body)
             nom = data.get('nom')
+            telephone = data.get('telephone')
             email = data.get('email')
-            
+
             if not nom or not email:
-                return JsonResponse({'error': 'Nom et email requis'}, status=400)
+                return JsonResponse({'error': 'Nom et Telephone requis'}, status=400)
             
             # Créer le prospect
             prospect = Prospect.objects.create(
                 nom=nom,
+                telephone=telephone,
                 email=email,
                 influenceur=influenceur
             )
@@ -166,170 +140,3 @@ def affiliation_form_view(request, code_affiliation):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     
-    # GET request - afficher le formulaire
-    html_content = f"""
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Inscription via {influenceur.nom}</title>
-        <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                margin: 0;
-                padding: 20px;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }}
-            .container {{
-                background: white;
-                padding: 40px;
-                border-radius: 15px;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                max-width: 500px;
-                width: 100%;
-            }}
-            .header {{
-                text-align: center;
-                margin-bottom: 30px;
-            }}
-            .header h1 {{
-                color: #333;
-                margin-bottom: 10px;
-            }}
-            .header p {{
-                color: #666;
-                font-size: 16px;
-            }}
-            .form-group {{
-                margin-bottom: 20px;
-            }}
-            label {{
-                display: block;
-                margin-bottom: 8px;
-                color: #333;
-                font-weight: 500;
-            }}
-            input[type="text"], input[type="email"] {{
-                width: 100%;
-                padding: 12px;
-                border: 2px solid #e1e5e9;
-                border-radius: 8px;
-                font-size: 16px;
-                transition: border-color 0.3s;
-                box-sizing: border-box;
-            }}
-            input[type="text"]:focus, input[type="email"]:focus {{
-                outline: none;
-                border-color: #667eea;
-            }}
-            button {{
-                width: 100%;
-                padding: 15px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: transform 0.2s;
-            }}
-            button:hover {{
-                transform: translateY(-2px);
-            }}
-            .success {{
-                display: none;
-                background: #d4edda;
-                color: #155724;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 20px;
-                text-align: center;
-            }}
-            .error {{
-                display: none;
-                background: #f8d7da;
-                color: #721c24;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 20px;
-                text-align: center;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🎉 Inscription via {influenceur.nom}</h1>
-                <p>Remplissez le formulaire ci-dessous pour vous inscrire</p>
-            </div>
-            
-            <form id="affiliationForm">
-                <div class="form-group">
-                    <label for="nom">Nom complet *</label>
-                    <input type="text" id="nom" name="nom" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                
-                <button type="submit">S'inscrire</button>
-            </form>
-            
-            <div id="success" class="success">
-                ✅ Inscription réussie ! Merci de vous être inscrit via {influenceur.nom}.
-            </div>
-            
-            <div id="error" class="error">
-                ❌ Une erreur s'est produite. Veuillez réessayer.
-            </div>
-        </div>
-        
-        <script>
-            document.getElementById('affiliationForm').addEventListener('submit', async function(e) {{
-                e.preventDefault();
-                
-                const formData = {{
-                    nom: document.getElementById('nom').value,
-                    email: document.getElementById('email').value
-                }};
-                
-                try {{
-                    const response = await fetch(window.location.href, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json',
-                        }},
-                        body: JSON.stringify(formData)
-                    }});
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok) {{
-                        document.getElementById('success').style.display = 'block';
-                        document.getElementById('error').style.display = 'none';
-                        document.getElementById('affiliationForm').style.display = 'none';
-                    }} else {{
-                        document.getElementById('error').textContent = result.error || 'Une erreur s\'est produite';
-                        document.getElementById('error').style.display = 'block';
-                        document.getElementById('success').style.display = 'none';
-                    }}
-                }} catch (error) {{
-                    document.getElementById('error').textContent = 'Erreur de connexion';
-                    document.getElementById('error').style.display = 'block';
-                    document.getElementById('success').style.display = 'none';
-                }}
-            }});
-        </script>
-    </body>
-    </html>
-    """
-    
-    return HttpResponse(html_content, content_type='text/html')

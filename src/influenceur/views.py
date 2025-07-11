@@ -14,8 +14,7 @@ from .permissions import (
     CanValidateProspects, CanPayRemises, CanViewStatistics, IsOwnerOrAdmin
 )
 from .auth import get_influenceur_from_user
-from django.core.mail import send_mail
-from django.conf import settings
+from .email_service import EmailService
 from django.db import models
 
 @api_view(['GET', 'POST'])
@@ -35,17 +34,17 @@ def influenceur_view(request):
             # On sauvegarde et on récupère l'instance créée
             influenceur = serializer.save()
 
-            # Envoi du mail avec le lien d'affiliation
+            # Envoi des emails avec le nouveau service
             try:
-                send_mail(
-                    subject="Votre lien d'affiliation",
-                    message=f"Bonjour {influenceur.nom}, voici votre lien d'affiliation : {influenceur.get_affiliation_link()}",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[influenceur.email],
-                    fail_silently=True,
-                )
+                # Email d'affiliation avec le lien
+                EmailService.send_affiliation_link(influenceur)
+                
+                # Email de bienvenue
+                EmailService.send_welcome_email(influenceur)
+                
             except Exception as e:
-                print(f"Erreur lors de l'envoi de la notification : {e}")
+                print(f"Erreur lors de l'envoi des emails : {e}")
+                # On continue même si l'email échoue
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

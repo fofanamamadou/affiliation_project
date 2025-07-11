@@ -10,7 +10,8 @@ class Prospect(models.Model):
         ('confirme', 'Confirmé'),
     ]
     nom = models.CharField(max_length=100)
-    email = models.EmailField()
+    email = models.EmailField(blank=True, unique=True)
+    telephone = models.CharField(max_length=8, blank=False, unique=True)
     date_inscription = models.DateTimeField(default=timezone.now)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     influenceur = models.ForeignKey(Influenceur, on_delete=models.CASCADE, related_name='prospects')

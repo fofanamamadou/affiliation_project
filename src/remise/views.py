@@ -13,12 +13,12 @@ from django.utils import timezone
 from django.db import models
 from decimal import Decimal
 
-@api_view(['GET', 'POST'])
+@api_view(['GET'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsInfluenceurOrAdmin])
 def remise_view(request):
     """
-    Vue API pour lister toutes les remises (GET) ou en créer une (POST).
+    Vue API pour lister toutes les remises (GET) .
     Les influenceurs voient leurs propres remises, les admins voient toutes.
     """
     if request.method == 'GET':
@@ -31,38 +31,7 @@ def remise_view(request):
             
         serializer = RemiseSerializers(remises, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    elif request.method == 'POST':
-        serializer = RemiseSerializers(data=request.data)
-        if serializer.is_valid():
-            remise = serializer.save()
-            
-            # Notification à l'influenceur
-            try:
-                send_mail(
-                    subject=f"💰 Nouvelle remise disponible !",
-                    message=f"""
-                    Bonjour {remise.influenceur.nom},
-                    
-                    💰 Une nouvelle remise de {remise.montant}€ a été générée pour vous !
-                    
-                    📋 Détails :
-                    - Montant : {remise.montant}€
-                    - Description : {remise.description}
-                    - Date de création : {remise.date_creation.strftime('%d/%m/%Y à %H:%M')}
-                    
-                    📊 Connectez-vous à votre dashboard pour voir tous vos gains.
-                    
-                    Merci pour votre contribution !
-                    """,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[remise.influenceur.email],
-                    fail_silently=True,
-                )
-            except Exception as e:
-                print(f"Erreur lors de l'envoi de la notification : {e}")
-            
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])

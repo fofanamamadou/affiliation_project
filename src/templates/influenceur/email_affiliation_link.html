@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votre lien d'affiliation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #34495e;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .affiliation-link {
+            background-color: #3498db;
+            color: white;
+            padding: 15px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin: 20px 0;
+            font-weight: bold;
+            word-break: break-all;
+        }
+        .affiliation-link:hover {
+            background-color: #2980b9;
+        }
+        .info-box {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #3498db;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .button {
+            background-color: #27ae60;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #229954;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo">{{ site_name }}</div>
+        </div>
+        
+        <h1 class="title">🎉 Votre lien d'affiliation est prêt !</h1>
+        
+        <div class="greeting">
+            Bonjour <strong>{{ influenceur.nom }}</strong>,
+        </div>
+        
+        <div class="content">
+            <p>Félicitations ! Votre compte d'influenceur a été créé avec succès dans notre système d'affiliation.</p>
+            
+            <div class="highlight">
+                <strong>Votre lien d'affiliation unique :</strong>
+                <br>
+                <a href="{{ affiliation_link }}" class="affiliation-link">{{ affiliation_link }}</a>
+            </div>
+            
+            <div class="info-box">
+                <h3>📋 Comment utiliser votre lien d'affiliation :</h3>
+                <ul>
+                    <li>Partagez ce lien sur vos réseaux sociaux</li>
+                    <li>Intégrez-le dans vos contenus</li>
+                    <li>Envoyez-le à votre audience</li>
+                    <li>Gagnez des commissions sur chaque vente</li>
+                </ul>
+            </div>
+            
+            <p><strong>Prochaines étapes :</strong></p>
+            <ul>
+                <li>Connectez-vous à votre espace personnel</li>
+                <li>Consultez vos statistiques de performance</li>
+                <li>Suivez vos commissions en temps réel</li>
+                <li>Accédez à vos outils de promotion</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ base_url }}/login" class="button">🔐 Accéder à mon espace</a>
+        </div>
+        
+        <div class="footer">
+            <p>Merci de faire partie de notre programme d'affiliation !</p>
+            <p><strong>{{ site_name }}</strong></p>
+            <p>Si vous avez des questions, n'hésitez pas à nous contacter.</p>
+        </div>
+    </div>
+</body>
+</html> 

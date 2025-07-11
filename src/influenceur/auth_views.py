@@ -1,21 +1,23 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.authtoken.models import Token
-from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from .models import Influenceur
-from .auth import authenticate_influenceur, get_influenceur_from_user
+from .jwt_auth import JWTAuthService
 from .serializers import InfluenceurSerializer
 from .permissions import IsInfluenceurOrAdmin, IsOwnerOrAdmin
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
     """
-    Vue de connexion pour les influenceurs
+    Vue de connexion pour les superusers et influenceurs
     """
     try:
         data = json.loads(request.body)
@@ -27,32 +29,45 @@ def login_view(request):
                 'error': 'Email et mot de passe requis'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Authentifier l'influenceur
-        auth_result = authenticate_influenceur(email, password)
+        # Authentifier avec JWT (superuser ou influenceur)
+        auth_result = JWTAuthService.authenticate_user(email, password)
         
-        if auth_result:
-            influenceur = auth_result['influenceur']
-            token = auth_result['token']
+        if auth_result['success']:
+            access_token = auth_result['access_token']
+            refresh_token = auth_result['refresh_token']
+            user_type = auth_result['user_type']
+            permissions = auth_result['permissions']
             
-            serializer = InfluenceurSerializer(influenceur)
-            
-            return Response({
+            response_data = {
                 'success': True,
                 'message': 'Connexion réussie',
-                'token': token,
-                'influenceur': serializer.data,
-                'permissions': {
-                    'is_admin': influenceur.is_admin(),
-                    'is_moderateur': influenceur.is_moderateur(),
-                    'peut_creer_influenceurs': influenceur.has_permission('creer_influenceurs'),
-                    'peut_valider_prospects': influenceur.has_permission('valider_prospects'),
-                    'peut_payer_remises': influenceur.has_permission('payer_remises'),
-                    'peut_voir_statistiques': influenceur.has_permission('voir_statistiques'),
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'user_type': user_type,
+                'permissions': permissions,
+                'token_type': 'Bearer',
+                'expires_in': 86400  # 24 heures en secondes
+            }
+            
+            # Ajouter les données spécifiques selon le type d'utilisateur
+            if user_type == 'superuser':
+                response_data['user'] = {
+                    'id': auth_result['user'].id,
+                    'username': auth_result['user'].username,
+                    'email': auth_result['user'].email,
+                    'first_name': auth_result['user'].first_name,
+                    'last_name': auth_result['user'].last_name,
+                    'is_superuser': True
                 }
-            }, status=status.HTTP_200_OK)
+            else:  # influenceur
+                influenceur = auth_result['influenceur']
+                serializer = InfluenceurSerializer(influenceur)
+                response_data['influenceur'] = serializer.data
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         else:
             return Response({
-                'error': 'Email ou mot de passe incorrect'
+                'error': auth_result['error']
             }, status=status.HTTP_401_UNAUTHORIZED)
             
     except json.JSONDecodeError:
@@ -60,62 +75,149 @@ def login_view(request):
             'error': 'Données JSON invalides'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        logger.error(f"Erreur lors de la connexion: {str(e)}")
         return Response({
-            'error': f'Erreur lors de la connexion: {str(e)}'
+            'error': 'Erreur lors de la connexion'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@permission_classes([IsInfluenceurOrAdmin])
+@permission_classes([AllowAny])
+def refresh_token_view(request):
+    """
+    Vue pour rafraîchir un token JWT
+    """
+    try:
+        data = json.loads(request.body)
+        refresh_token = data.get('refresh_token')
+        
+        if not refresh_token:
+            return Response({
+                'error': 'Refresh token requis'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Rafraîchir le token
+        result = JWTAuthService.refresh_token(refresh_token)
+        
+        if result['success']:
+            return Response({
+                'success': True,
+                'access_token': result['access_token'],
+                'refresh_token': result['refresh_token'],
+                'token_type': 'Bearer',
+                'expires_in': 86400
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': result['error']
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            
+    except json.JSONDecodeError:
+        return Response({
+            'error': 'Données JSON invalides'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Erreur lors du refresh token: {str(e)}")
+        return Response({
+            'error': 'Erreur lors du rafraîchissement du token'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def logout_view(request):
     """
     Vue de déconnexion
     """
     try:
-        # Supprimer le token d'authentification
-        if hasattr(request, 'auth'):
-            request.auth.delete()
+        data = json.loads(request.body)
+        refresh_token = data.get('refresh_token')
         
+        if not refresh_token:
+            return Response({
+                'error': 'Refresh token requis'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Déconnecter
+        result = JWTAuthService.logout(refresh_token)
+        
+        if result['success']:
+            return Response({
+                'success': True,
+                'message': result['message']
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': result['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except json.JSONDecodeError:
         return Response({
-            'success': True,
-            'message': 'Déconnexion réussie'
-        }, status=status.HTTP_200_OK)
-        
+            'error': 'Données JSON invalides'
+        }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        logger.error(f"Erreur lors de la déconnexion: {str(e)}")
         return Response({
-            'error': f'Erreur lors de la déconnexion: {str(e)}'
+            'error': 'Erreur lors de la déconnexion'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([IsInfluenceurOrAdmin])
+@permission_classes([IsAuthenticated])
 def profile_view(request):
     """
     Vue pour récupérer le profil de l'utilisateur connecté
     """
     try:
-        influenceur = get_influenceur_from_user(request.user)
-        
-        if not influenceur:
+        # Récupérer l'utilisateur depuis le token JWT
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            user_data = JWTAuthService.get_user_from_token(token)
+        else:
             return Response({
-                'error': 'Influenceur non trouvé'
+                'error': 'Token d\'authentification requis'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user_data:
+            return Response({
+                'error': 'Utilisateur non trouvé'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = InfluenceurSerializer(influenceur)
+        user_type = user_data['user_type']
+        permissions = user_data['permissions']
         
-        return Response({
-            'influenceur': serializer.data,
-            'permissions': {
-                'is_admin': influenceur.is_admin(),
-                'is_moderateur': influenceur.is_moderateur(),
-                'peut_creer_influenceurs': influenceur.has_permission('creer_influenceurs'),
-                'peut_valider_prospects': influenceur.has_permission('valider_prospects'),
-                'peut_payer_remises': influenceur.has_permission('payer_remises'),
-                'peut_voir_statistiques': influenceur.has_permission('voir_statistiques'),
+        response_data = {
+            'user_type': user_type,
+            'permissions': permissions
+        }
+        
+        if user_type == 'superuser':
+            user = user_data['user']
+            response_data['user'] = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_superuser': True,
+                'date_joined': user.date_joined,
+                'last_login': user.last_login
             }
-        }, status=status.HTTP_200_OK)
+        else:  # influenceur
+            influenceur = user_data['influenceur']
+            serializer = InfluenceurSerializer(influenceur)
+            response_data['influenceur'] = serializer.data
+            response_data['last_login'] = influenceur.date_derniere_connexion
+            response_data['account_status'] = {
+                'is_active': influenceur.is_active,
+                'is_locked': influenceur.is_locked(),
+                'login_attempts': influenceur.nombre_tentatives_connexion
+            }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
+        logger.error(f"Erreur lors de la récupération du profil: {str(e)}")
         return Response({
-            'error': f'Erreur lors de la récupération du profil: {str(e)}'
+            'error': 'Erreur lors de la récupération du profil'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -145,22 +247,27 @@ def register_view(request):
         influenceur = Influenceur.objects.create(
             nom=nom,
             email=email,
-            password=password,
+            password=password,  # Sera hashé automatiquement
             role='influenceur'  # Par défaut
         )
         
         # Authentifier automatiquement
-        auth_result = authenticate_influenceur(email, password)
+        auth_result = JWTAuthService.authenticate_user(email, password)
         
-        if auth_result:
-            token = auth_result['token']
+        if auth_result['success']:
+            access_token = auth_result['access_token']
+            refresh_token = auth_result['refresh_token']
             serializer = InfluenceurSerializer(influenceur)
             
             return Response({
                 'success': True,
                 'message': 'Inscription réussie',
-                'token': token,
-                'influenceur': serializer.data
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'influenceur': serializer.data,
+                'permissions': influenceur.get_all_permissions(),
+                'token_type': 'Bearer',
+                'expires_in': 86400
             }, status=status.HTTP_201_CREATED)
         else:
             return Response({
@@ -172,12 +279,13 @@ def register_view(request):
             'error': 'Données JSON invalides'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        logger.error(f"Erreur lors de l'inscription: {str(e)}")
         return Response({
-            'error': f'Erreur lors de l\'inscription: {str(e)}'
+            'error': 'Erreur lors de l\'inscription'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@permission_classes([IsInfluenceurOrAdmin])
+@permission_classes([IsAuthenticated])
 def change_password_view(request):
     """
     Vue pour changer le mot de passe
@@ -192,22 +300,42 @@ def change_password_view(request):
                 'error': 'Ancien et nouveau mot de passe requis'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        influenceur = get_influenceur_from_user(request.user)
-        
-        if not influenceur:
+        # Récupérer l'utilisateur depuis le token
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            user_data = JWTAuthService.get_user_from_token(token)
+        else:
             return Response({
-                'error': 'Influenceur non trouvé'
+                'error': 'Token d\'authentification requis'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user_data:
+            return Response({
+                'error': 'Utilisateur non trouvé'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Vérifier l'ancien mot de passe
-        if influenceur.password != current_password:
-            return Response({
-                'error': 'Ancien mot de passe incorrect'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        user_type = user_data['user_type']
         
-        # Changer le mot de passe
-        influenceur.password = new_password
-        influenceur.save()
+        if user_type == 'superuser':
+            # Changer le mot de passe du superuser
+            user = user_data['user']
+            if not user.check_password(current_password):
+                return Response({
+                    'error': 'Ancien mot de passe incorrect'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user.set_password(new_password)
+            user.save()
+        else:
+            # Changer le mot de passe de l'influenceur
+            influenceur = user_data['influenceur']
+            if not influenceur.check_password(current_password):
+                return Response({
+                    'error': 'Ancien mot de passe incorrect'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            influenceur.set_password(new_password)
         
         return Response({
             'success': True,
@@ -219,6 +347,7 @@ def change_password_view(request):
             'error': 'Données JSON invalides'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        logger.error(f"Erreur lors du changement de mot de passe: {str(e)}")
         return Response({
-            'error': f'Erreur lors du changement de mot de passe: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+            'error': 'Erreur lors du changement de mot de passe'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
