@@ -18,7 +18,7 @@ class Remise(models.Model):
     description = models.TextField(blank=True, help_text="Description de la remise (ex: commission pour 5 prospects)")
 
     def __str__(self):
-        return f"{self.influenceur.nom} - {self.montant}€ - {self.statut}"
+        return f"{self.influenceur.nom} - {self.montant} F CFA - {self.statut}"
 
     def marquer_comme_payee(self):
         """Marque la remise comme payée et enregistre la date de paiement"""
@@ -31,18 +31,18 @@ class Remise(models.Model):
     def calculer_remise_automatique(cls, influenceur, montant_par_prospect=Decimal('10.00')):
         """
         Calcule et crée automatiquement une remise pour un influenceur
-        basée sur ses prospects confirmés sans remise
+        basée sur ses prospects sans remise (quel que soit leur statut)
+        Le montant est exprimé en F CFA.
         """
         from prospect.models import Prospect
         
-        # Compter les prospects confirmés sans remise
-        prospects_confirmes = Prospect.objects.filter(
+        # Prendre tous les prospects sans remise
+        prospects_a_remunerer = Prospect.objects.filter(
             influenceur=influenceur,
-            statut='confirme',
             remise__isnull=True
         )
         
-        nb_prospects = prospects_confirmes.count()
+        nb_prospects = prospects_a_remunerer.count()
         
         if nb_prospects > 0:
             montant_total = nb_prospects * montant_par_prospect
@@ -51,11 +51,11 @@ class Remise(models.Model):
             remise = cls.objects.create(
                 influenceur=influenceur,
                 montant=montant_total,
-                description=f"Commission pour {nb_prospects} prospect(s) confirmé(s) à {montant_par_prospect}€ chacun"
+                description=f"Commission pour {nb_prospects} prospect(s) à {montant_par_prospect} F CFA chacun"
             )
             
             # Associer la remise aux prospects
-            prospects_confirmes.update(remise=remise)
+            prospects_a_remunerer.update(remise=remise)
             
             return remise
         
@@ -65,10 +65,9 @@ class Remise(models.Model):
     def generer_remises_pour_tous(cls, montant_par_prospect=Decimal('10.00')):
         """
         Génère automatiquement des remises pour tous les influenceurs
-        ayant des prospects confirmés sans remise
+        ayant des prospects sans remise (quel que soit leur statut)
         """
         influenceurs_avec_prospects = Influenceur.objects.filter(
-            prospects__statut='confirme',
             prospects__remise__isnull=True
         ).distinct()
         

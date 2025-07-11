@@ -3,7 +3,7 @@ from .auth_views import (login_view, logout_view, profile_view, register_view, c
                         refresh_token_view)
 from .views import (influenceur_view, influenceur_detail_view, influenceur_update_view,
                     influenceur_delete_view, influenceur_dashboard_view, influenceur_prospects_view, 
-                    influenceur_remises_view)
+                    influenceur_remises_view, dashboard_global_admin_view)
 
 urlpatterns = [
     # URLs d'authentification JWT
@@ -23,5 +23,6 @@ urlpatterns = [
     path('influenceurs/<int:pk>/dashboard/', influenceur_dashboard_view, name='influenceur_dashboard'),
     path('influenceurs/<int:pk>/prospects/', influenceur_prospects_view, name='influenceur_prospects'),
     path('influenceurs/<int:pk>/remises/', influenceur_remises_view, name='influenceur_remises'),
+    path('dashboard-global/', dashboard_global_admin_view, name='dashboard_global_admin'),
 ]
 

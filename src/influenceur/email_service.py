@@ -127,7 +127,7 @@ L'équipe {context['site_name']}
             text_message = f"""
 Félicitations {influenceur.nom} !
 
-Vous avez gagné une nouvelle commission de {commission_amount}€ grâce au prospect {prospect.nom}.
+Vous avez gagné une nouvelle commission de {commission_amount} F CFA grâce au prospect {prospect.nom}.
 
 Continuez comme ça !
 

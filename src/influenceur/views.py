@@ -16,6 +16,15 @@ from .permissions import (
 from .auth import get_influenceur_from_user
 from .email_service import EmailService
 from django.db import models
+from django.db.models import Count, Sum
+from remise.models import Remise
+from prospect.models import Prospect
+from .models import Influenceur
+from .permissions import IsAdminUser
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from datetime import timedelta
+from django.utils import timezone
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAdminUser])
@@ -165,3 +174,53 @@ def influenceur_remises_view(request, pk):
     remises = Remise.objects.filter(influenceur=influenceur)
     serializer = RemiseSerializers(remises, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def dashboard_global_admin_view(request):
+    """
+    Vue API pour le dashboard global admin (statistiques générales)
+    """
+    # Statistiques globales
+    total_influenceurs = Influenceur.objects.count()
+    total_prospects = Prospect.objects.count()
+    prospects_en_attente = Prospect.objects.filter(statut='en_attente').count()
+    prospects_confirmes = Prospect.objects.filter(statut='confirme').count()
+    total_primes = Remise.objects.count()
+    primes_payees = Remise.objects.filter(statut='payee').count()
+    primes_en_attente = Remise.objects.filter(statut='en_attente').count()
+
+    # Top influenceurs (par nombre de prospects)
+    top_influenceurs_qs = Influenceur.objects.annotate(
+        nb_prospects=Count('prospects'),
+        nb_primes=Count('remises')
+    ).order_by('-nb_prospects')[:5]
+    top_influenceurs = [
+        {
+            'nom': i.nom,
+            'nb_prospects': i.nb_prospects,
+            'nb_primes': i.nb_primes
+        }
+        for i in top_influenceurs_qs
+    ]
+
+    # Evolution prospects (nombre d'inscriptions par jour sur les 7 derniers jours)
+    today = timezone.now().date()
+    evolution_prospects = []
+    for i in range(7):
+        day = today - timedelta(days=6-i)
+        count = Prospect.objects.filter(date_inscription__date=day).count()
+        evolution_prospects.append({'date': str(day), 'count': count})
+
+    data = {
+        'total_influenceurs': total_influenceurs,
+        'total_prospects': total_prospects,
+        'prospects_en_attente': prospects_en_attente,
+        'prospects_confirmes': prospects_confirmes,
+        'total_primes': total_primes,
+        'primes_payees': primes_payees,
+        'primes_en_attente': primes_en_attente,
+        'top_influenceurs': top_influenceurs,
+        'evolution_prospects': evolution_prospects,
+    }
+    return Response(data)

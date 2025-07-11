@@ -102,32 +102,6 @@ def affiliation_form_view(request, code_affiliation):
                 influenceur=influenceur
             )
             
-            # Notification automatique à l'influenceur
-            try:
-                send_mail(
-                    subject=f"🎉 Nouveau prospect via votre lien d'affiliation !",
-                    message=f"""
-                    Bonjour {influenceur.nom},
-                    
-                    🎉 Félicitations ! Un nouveau prospect s'est inscrit via votre lien d'affiliation :
-                    
-                    📋 Détails du prospect :
-                    - Nom : {prospect.nom}
-                    - Email : {prospect.email}
-                    - Date d'inscription : {prospect.date_inscription.strftime('%d/%m/%Y à %H:%M')}
-                    
-                    🔗 Votre lien d'affiliation : {influenceur.get_affiliation_link()}
-                    
-                    📊 Connectez-vous à votre dashboard pour suivre vos prospects et vos gains.
-                    
-                    Merci pour votre contribution !
-                    """,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[influenceur.email],
-                    fail_silently=True,
-                )
-            except Exception as e:
-                print(f"Erreur lors de l'envoi de la notification : {e}")
             
             return JsonResponse({
                 'success': True,

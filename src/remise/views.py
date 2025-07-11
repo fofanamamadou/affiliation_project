@@ -60,29 +60,6 @@ def remise_payer_view(request, pk):
         remise.save()
     
     # Notification de paiement à l'influenceur
-    try:
-        send_mail(
-            subject=f"✅ Remise payée !",
-            message=f"""
-            Bonjour {remise.influenceur.nom},
-            
-            ✅ Votre remise de {remise.montant}€ a été payée !
-            
-            📋 Détails :
-            - Montant : {remise.montant}€
-            - Date de paiement : {remise.date_paiement.strftime('%d/%m/%Y à %H:%M')}
-            - Description : {remise.description}
-            
-            💳 Le montant a été transféré sur votre compte.
-            
-            Merci pour votre contribution !
-            """,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[remise.influenceur.email],
-            fail_silently=True,
-        )
-    except Exception as e:
-        print(f"Erreur lors de l'envoi de la notification : {e}")
     
     serializer = RemiseSerializers(remise)
     return Response({'detail': 'Remise marquée comme payée.', 'remise': serializer.data}, status=status.HTTP_200_OK)

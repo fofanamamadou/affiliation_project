@@ -146,10 +146,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AFFILIATION_BASE_URL = config('AFFILIATION_BASE_URL', default="http://localhost:8000")
 
-# Configuration email pour le développement (console)
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    DEFAULT_FROM_EMAIL = 'noreply@localhost.com'
+
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
